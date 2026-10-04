@@ -1,0 +1,109 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.interpolate import lagrange
+
+# --- METODA LAGRANGE'A z pliku ---
+def lagrange_value(x_nodes, y_nodes, x):
+    """Oblicza wartosc wielomianu Lagrange'a w punkcie lub punktach x."""
+    x = np.asarray(x, dtype=float)
+    x_nodes = np.asarray(x_nodes, dtype=float)
+    y_nodes = np.asarray(y_nodes, dtype=float)
+    
+    result = np.zeros_like(x, dtype=float)
+    n = len(x_nodes)
+    
+    for i in range(n):
+        basis = np.ones_like(x, dtype=float)
+        for k in range(n):
+            if k != i:
+                basis *= (x - x_nodes[k]) / (x_nodes[i] - x_nodes[k])
+        result += y_nodes[i] * basis
+        
+    return result
+
+# --- METODA NEWTONA z pliku ---
+def newton_coefficients(x_nodes, y_nodes):
+    """Wyznacza wspolczynniki postaci Newtona."""
+    x_nodes = np.asarray(x_nodes, dtype=float)
+    coef = np.asarray(y_nodes, dtype=float).copy()
+    n = len(x_nodes)
+    
+    for j in range(1, n):
+        coef[j:n] = (coef[j:n] - coef[j-1:n-1]) / (x_nodes[j:n] - x_nodes[0:n-j])
+    return coef
+
+def newton_value(x_nodes, coef, x):
+    """Oblicza wartosc wielomianu Newtona w punkcie lub punktach x."""
+    x_nodes = np.asarray(x_nodes, dtype=float)
+    coef = np.asarray(coef, dtype=float)
+    x = np.asarray(x, dtype=float)
+    
+    result = np.zeros_like(x, dtype=float) + coef[-1]
+    for k in range(len(coef) - 2, -1, -1):
+        result = coef[k] + (x - x_nodes[k]) * result
+    return result
+
+# --- METODA NEVILLE'A (nowa implementacja) ---
+def neville_value(x_nodes, y_nodes, x):
+    """Oblicza wartosc wielomianu korzystajac z algorytmu Neville'a."""
+    x = np.asarray(x, dtype=float)
+    x_nodes = np.asarray(x_nodes, dtype=float)
+    y_nodes = np.asarray(y_nodes, dtype=float)
+    
+    n = len(x_nodes)
+    # Tworzymy tablicę wielomianów (dla każdego x testowego tworzona jest kopia węzłów)
+    P = [np.full_like(x, y, dtype=float) for y in y_nodes]
+    
+    for j in range(1, n):
+        for i in range(n - j):
+            # Rekurencyjny wzór Neville'a
+            P[i] = ((x - x_nodes[i+j]) * P[i] - (x - x_nodes[i]) * P[i+1]) / (x_nodes[i] - x_nodes[i+j])
+            
+    return P[0]
+
+# --- DANE Z WYKŁADU ---
+x_nodes = np.array([-1.0, 0.0, 1.0, 2.0])
+y_nodes = np.array([0.0, 1.0, 2.0, 9.0])
+
+# Obliczanie wyników dla wszystkich trzech metod
+x_test = 0.5
+y_lagr = lagrange_value(x_nodes, y_nodes, x_test)
+coef_newton = newton_coefficients(x_nodes, y_nodes)
+y_newt = newton_value(x_nodes, coef_newton, x_test)
+y_nevi = neville_value(x_nodes, y_nodes, x_test)
+
+# WERYFIKACJA ZA POMOCĄ SCIPY
+p_scipy = lagrange(x_nodes, y_nodes)
+y_scipy = p_scipy(x_test)
+
+print(f"P(0.5) wg Lagrange'a: {y_lagr}")
+print(f"P(0.5) wg Newtona:    {y_newt}")
+print(f"P(0.5) wg Neville'a:  {y_nevi}")
+print(f"P(0.5) wg SciPy:      {y_scipy}")
+
+# --- TWORZENIE WYKRESÓW PORÓWNAWCZYCH ---
+x_plot = np.linspace(-1.25, 2.25, 500)
+
+y_plot_lagrange = lagrange_value(x_nodes, y_nodes, x_plot)
+y_plot_newton = newton_value(x_nodes, coef_newton, x_plot)
+y_plot_neville = neville_value(x_nodes, y_nodes, x_plot)
+
+# Sprawdzenie zgodności z wykorzystaniem funkcji numerycznej numpy (np.allclose)
+zgodnosc_lag_newt = np.allclose(y_plot_lagrange, y_plot_newton)
+zgodnosc_lag_nev = np.allclose(y_plot_lagrange, y_plot_neville)
+print(f"Czy krzywe dla Lagrange i Newton sa zgodne? {zgodnosc_lag_newt}")
+print(f"Czy krzywe dla Lagrange i Neville sa zgodne? {zgodnosc_lag_nev}")
+
+plt.figure(figsize=(10, 6))
+# Rysowanie różnych grubości i stylów, żeby było widać, że się na siebie nakładają
+plt.plot(x_plot, y_plot_lagrange, label="wielomian Lagrange'a", linewidth=5, alpha=0.5)
+plt.plot(x_plot, y_plot_newton, "--", label="wielomian Newtona", linewidth=3)
+plt.plot(x_plot, y_plot_neville, ":", label="wielomian Neville'a", linewidth=2, color="black")
+plt.scatter(x_nodes, y_nodes, color="red", zorder=4, label="węzły")
+
+plt.xlabel("x")
+plt.ylabel("P(x)")
+plt.title("Interpolacja danych - Porównanie trzech metod")
+plt.grid(True)
+plt.legend()
+plt.show()
